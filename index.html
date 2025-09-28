@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>コンパス作図（見本4種：②=中心＋四隅1/4扇／追従ON/OFF）</title>
+<style>
+  :root{
+    --ink:#111827; --muted:#6b7280; --brand:#2563eb;
+    --paper:#fff; --grid:#bfdbfe; --frame:#93c5fd;
+    --outline:#5b4635; --needle:#ef4444; --pencil:#8fd3f4; --metal:#d1d5db;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#f7fafc;color:var(--ink);
+       font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif}
+  header{padding:12px 14px;background:#fff;border-bottom:1px solid #e5e7eb}
+  main{max-width:980px;margin:0 auto;padding:14px;display:grid;grid-template-columns:520px 1fr;gap:16px}
+  .panel{background:#fff;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+  .panel h2{font-size:15px;margin:0;padding:10px 12px;border-bottom:1px solid #e5e7eb}
+  .panel .content{padding:12px}
+  button{border:1px solid #cbd5e1;background:#fff;border-radius:10px;padding:8px 12px;cursor:pointer;font-size:14px}
+  button.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+  svg{width:100%;height:auto;display:block;background:var(--paper);border-radius:14px}
+  .row{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:6px 0}
+  .hint{font-size:12px;color:#374151;margin-top:6px}
+</style>
+</head>
+<body>
+<header>
+  <strong>コンパス作図ボード</strong>（見本4種・フラッシュ無し・四隅スナップ・内側クリップ）
+</header>
+
+<main>
+  <section class="panel">
+    <h2>作図盤（SVG 500×500）</h2>
+    <div class="content">
+      <svg id="board" viewBox="0 0 500 500" xmlns="http://www.w3.org/2000/svg" aria-label="作図盤">
+        <defs>
+          <!-- 盤全体クリップ（保持） -->
+          <clipPath id="clipSquare"><rect x="0" y="0" width="500" height="500"/></clipPath>
+          <!-- 内側だけ見せるクリップ（MARGIN=20, S=460 に対応） -->
+          <clipPath id="clipInner"><rect x="20" y="20" width="460" height="460"/></clipPath>
+
+          <!-- 針（原点=針先） -->
+          <g id="NEEDLE_TIP_AT_ORIGIN">
+            <circle cx="0" cy="0" r="3.2" fill="var(--needle)"/>
+            <path d="M0,0 L62.5,-7 L62.5,7 Z" fill="var(--metal)"/>
+            <path d="M0,0 L62.5,-7 L62.5,7 Z" fill="none" stroke="var(--outline)" stroke-width="3"/>
+          </g>
+          <!-- ヒンジ -->
+          <g id="HINGE_RING">
+            <circle cx="0" cy="0" r="12" fill="#a58a79" stroke="var(--outline)" stroke-width="3"/>
+            <circle cx="0" cy="0" r="4" fill="#fff" stroke="var(--outline)" stroke-width="2"/>
+          </g>
+          <!-- 鉛筆脚（原点=ヒンジ接続位置） -->
+          <g id="PENCIL_BASE_AT_ORIGIN">
+            <path d="M0,-10 L120,-10 L120,10 L0,10 Z" fill="var(--pencil)" stroke="var(--outline)" stroke-width="3"/>
+            <path d="M120,-10 L140,0 L120,10 Z" fill="var(--outline)"/>
+            <path d="M0,-10 L120,-10 L140,0 L120,10 L0,10 Z" fill="none" stroke="var(--outline)" stroke-width="3"/>
+          </g>
+        </defs>
+
+        <!-- グリッド／交点 -->
+        <g id="grid"></g>
+        <g id="nodes"></g>
+
+        <!-- 見本（赤・細）とユーザー描画（黒・標準）は内側だけ表示 -->
+        <g id="sampleLayer" clip-path="url(#clipInner)"></g>
+        <g id="drawLayer"   clip-path="url(#clipInner)"></g>
+
+        <!-- コンパス（原点＝針先） -->
+        <g id="compass" pointer-events="none" transform="translate(-100,-100)">
+          <g id="gPencil"><use href="#PENCIL_BASE_AT_ORIGIN"/></g>
+          <g id="gNeedle"><use href="#NEEDLE_TIP_AT_ORIGIN"/></g>
+          <g id="gHinge"><use href="#HINGE_RING"/></g>
+        </g>
+      </svg>
+
+      <div class="hint">
+        交点クリック→ドラッグ（水平/垂直のみ）→ドロップで円。<br>
+        見本は赤い細線で表示、白紙で見本のみ消去。
+      </div>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <h2>操作</h2>
+    <div class="content">
+      <div class="row">
+        <button id="btnUndo">取り消し</button>
+        <button id="btnClear">全消去</button>
+        <label><input type="checkbox" id="chkShowCompass" checked> コンパス表示</label>
+        <label title="描画中、ペンが少し遅れて付いてくる見た目。OFFで従来通り。">
+          <input type="checkbox" id="chkFollow" checked> 追従アニメ（実験）
+        </label>
+      </div>
+      <div class="row">
+        線の太さ <input id="strokeW" type="range" min="1" max="6" value="2">
+        線色 <input id="strokeC" type="color" value="#111111">
+      </div>
+      <div class="row">
+        <button id="btnSample1" class="primary">見本①</button>
+        <button id="btnSample2" class="primary">見本②</button>
+        <button id="btnSample3" class="primary">見本③</button>
+        <button id="btnSample4" class="primary">見本④</button>
+        <button id="btnClearSample">白紙</button>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<script>
+(function(){
+  /* ===== 盤設定（内側に縮小） ===== */
+  const VIEW=500, MARGIN=20, S=460, cells=4, step=S/cells; // step=115
+  const svg=document.getElementById('board');
+  const gridG=document.getElementById('grid'), nodesG=document.getElementById('nodes');
+  const sampleLayer=document.getElementById('sampleLayer');
+  const layer=document.getElementById('drawLayer');
+
+  /* ===== グリッド＆交点 ===== */
+  const lines=[]; for(let i=0;i<=cells;i++) lines.push(MARGIN+i*step);
+  const NODES=[]; for(let i=0;i<=cells;i++){ for(let j=0;j<=cells;j++){ NODES.push({x:MARGIN+i*step,y:MARGIN+j*step}); } }
+
+  const mkLine=(x1,y1,x2,y2,w,c)=>{
+    const l=document.createElementNS('http://www.w3.org/2000/svg','line');
+    l.setAttribute('x1',x1); l.setAttribute('y1',y1); l.setAttribute('x2',x2); l.setAttribute('y2',y2);
+    l.setAttribute('stroke',c); l.setAttribute('stroke-width',w); gridG.appendChild(l);
+  };
+  // 外枠（内側正方形）
+  mkLine(MARGIN,MARGIN,MARGIN+S,MARGIN,1.6,'var(--frame)');
+  mkLine(MARGIN+S,MARGIN,MARGIN+S,MARGIN+S,1.6,'var(--frame)');
+  mkLine(MARGIN+S,MARGIN+S,MARGIN,MARGIN+S,1.6,'var(--frame)');
+  mkLine(MARGIN,MARGIN,MARGIN,MARGIN+S,1.6,'var(--frame)');
+  // 内部グリッド
+  for(let i=1;i<cells;i++){ const v=MARGIN+i*step;
+    mkLine(v,MARGIN,v,MARGIN+S,.9,'var(--grid)');
+    mkLine(MARGIN,v,MARGIN+S,v,.9,'var(--grid)');
+  }
+  // 交点
+  for(const p of NODES){
+    const d=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    d.setAttribute('cx',p.x); d.setAttribute('cy',p.y); d.setAttribute('r',2.6);
+    d.setAttribute('fill','#60a5fa'); d.setAttribute('opacity','.85'); nodesG.appendChild(d);
+  }
+
+  /* ===== コンパス（外観・状態） ===== */
+  const compass=document.getElementById('compass'), gNeedle=document.getElementById('gNeedle'),
+        gPencil=document.getElementById('gPencil'), gHinge=document.getElementById('gHinge');
+  const chkShow=document.getElementById('chkShowCompass');
+  const chkFollow=document.getElementById('chkFollow');
+  const setCompassVisible=v=>compass.style.display=v?'block':'none';
+  chkShow.addEventListener('change',()=>setCompassVisible(chkShow.checked)); setCompassVisible(chkShow.checked);
+
+  const HP=62.5, LP=140; // 針長=1マス/2, 鉛筆脚テンプレ長
+  const state={down:false,cx:null,cy:null,tx:null,ty:null,axis:null,history:[]};
+  const SNAP=32;
+
+  /* ===== 座標補正＆スナップ ===== */
+  const pt=svg.createSVGPoint();
+  function toSVGClamped(e){
+    pt.x=e.clientX; pt.y=e.clientY;
+    const ctm=svg.getScreenCTM(); const p=ctm?pt.matrixTransform(ctm.inverse()):{x:0,y:0};
+    return {x: Math.max(0, Math.min(VIEW, p.x)), y: Math.max(0, Math.min(VIEW, p.y))};
+  }
+  function nearestNode(x,y){
+    let best=null, dmin=Infinity;
+    for(const p of NODES){ const d=Math.hypot(x-p.x,y-p.y); if(d<dmin){dmin=d; best=p;} }
+    return dmin<=SNAP ? best : null;
+  }
+  function snapAxis(cx,cy,x,y,a){
+    if(a==='h'){ let bx=lines[0], dmin=Math.abs(x-lines[0]);
+      for(const lx of lines){ const d=Math.abs(x-lx); if(d<dmin){dmin=d; bx=lx;} }
+      return {x:bx, y:cy};
+    }
+    let by=lines[0], dmin=Math.abs(y-lines[0]);
+    for(const ly of lines){ const d=Math.abs(y-ly); if(d<dmin){dmin=d; by=ly;} }
+    return {x:cx, y:by};
+  }
+
+  /* ===== コンパス姿勢 ===== */
+  function setCompassPose(cx,cy,tx,ty){
+    const r=Math.hypot(tx-cx,ty-cy);
+    const angDeg=Math.atan2(ty-cy,tx-cx)*180/Math.PI;
+    compass.setAttribute('transform', `translate(${cx},${cy}) rotate(${angDeg})`);
+    gNeedle.setAttribute('transform', `translate(0,0)`);
+    gHinge.setAttribute('transform', `translate(${HP},0)`);
+    const len=Math.max(0, r-HP), sx=(len<=0?0.0001:len)/LP;
+    gPencil.setAttribute('transform', `translate(${HP},0) scale(${sx},1)`);
+  }
+
+  /* ===== 円描画（フラッシュ無し＋追従ON/OFF） ===== */
+  const strokeW=document.getElementById('strokeW'), strokeC=document.getElementById('strokeC');
+  function arcPath(cx,cy,r,a0,a1){
+    while(a1<a0) a1+=Math.PI*2;
+    const large=(a1-a0)>Math.PI ? 1 : 0;
+    const x0=cx + r*Math.cos(a0), y0=cy + r*Math.sin(a0);
+    const x1=cx + r*Math.cos(a1), y1=cy + r*Math.sin(a1);
+    return `M ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1}`;
+  }
+  function animateCircleWithCompass(cx,cy,tx,ty){
+    const r=Math.hypot(tx-cx,ty-cy); if(r<=0) return;
+    const startA=Math.atan2(ty-cy,tx-cx), dur=1100, t0=performance.now();
+    let phi=startA; const kOn=0.35, kOff=1.0;
+
+    const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('fill','none'); path.setAttribute('stroke',strokeC.value);
+    path.setAttribute('stroke-width',strokeW.value); path.setAttribute('visibility','hidden');
+    layer.appendChild(path); state.history.push(path);
+
+    requestAnimationFrame(()=>{
+      path.setAttribute('visibility','visible');
+      function step(now){
+        const p=Math.min(1,(now-t0)/dur), target=startA+2*Math.PI*p, k=chkFollow.checked?kOn:kOff;
+        phi += (target - phi)*k;
+        const x=cx + r*Math.cos(phi), y=cy + r*Math.sin(phi);
+        setCompassPose(cx,cy,x,y);
+        if(p<1){ path.setAttribute('d', arcPath(cx,cy,r,startA,phi)); requestAnimationFrame(step); }
+        else{
+          const circle=document.createElementNS('http://www.w3.org/2000/svg','circle');
+          circle.setAttribute('cx',cx); circle.setAttribute('cy',cy); circle.setAttribute('r',r);
+          circle.setAttribute('fill','none'); circle.setAttribute('stroke',strokeC.value);
+          circle.setAttribute('stroke-width',strokeW.value);
+          layer.replaceChild(circle,path); state.history[state.history.length-1]=circle;
+          setCompassPose(cx,cy,tx,ty);
+        }
+      }
+      requestAnimationFrame(step);
+    });
+  }
+
+  /* ===== 入力イベント ===== */
+  svg.addEventListener('mousedown',e=>{
+    const p=toSVGClamped(e), n=nearestNode(p.x,p.y); if(!n) return;
+    state.down=true; state.cx=n.x; state.cy=n.y; state.tx=n.x; state.ty=n.y; state.axis=null;
+    if(chkShow.checked) compass.style.display='block';
+    setCompassPose(state.cx,state.cy,state.tx,state.ty);
+  });
+  svg.addEventListener('mousemove',e=>{
+    if(!state.down) return;
+    const p=toSVGClamped(e);
+    if(!state.axis){
+      const dx=Math.abs(p.x-state.cx), dy=Math.abs(p.y-state.cy);
+      if(Math.max(dx,dy)>6) state.axis = dx>=dy ? 'h' : 'v';
+      else { setCompassPose(state.cx,state.cy,state.tx,state.ty); return; }
+    }
+    const s=snapAxis(state.cx,state.cy,p.x,p.y,state.axis);
+    state.tx=s.x; state.ty=s.y;
+    setCompassPose(state.cx,state.cy,state.tx,state.ty);
+  });
+  svg.addEventListener('mouseup',()=>{ if(!state.down) return; state.down=false; animateCircleWithCompass(state.cx,state.cy,state.tx,state.ty); });
+  svg.addEventListener('mouseleave',()=>{ state.down=false; });
+
+  /* ===== 操作（履歴・消去） ===== */
+  document.getElementById('btnUndo').addEventListener('click',()=>{const last=state.history.pop(); if(last && last.parentNode) last.parentNode.removeChild(last);});
+  document.getElementById('btnClear').addEventListener('click',()=>{layer.innerHTML=''; state.history=[];});
+  document.getElementById('btnClearSample').addEventListener('click',()=>{sampleLayer.innerHTML='';});
+
+  /* ===== 見本描画（赤・最細） ===== */
+  function redCircle(cx,cy,r){
+    const c=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    c.setAttribute('cx',cx); c.setAttribute('cy',cy); c.setAttribute('r',r);
+    c.setAttribute('fill','none'); c.setAttribute('stroke','#ff0000'); c.setAttribute('stroke-width','1');
+    sampleLayer.appendChild(c);
+  }
+
+  // 見本①：四辺中点を中心、半径2マスの円×4
+  function sample1(){
+    sampleLayer.innerHTML='';
+    const R=step*2;
+    redCircle(MARGIN+S/2, MARGIN,       R); // 上
+    redCircle(MARGIN+S,   MARGIN+S/2,   R); // 右
+    redCircle(MARGIN+S/2, MARGIN+S,     R); // 下
+    redCircle(MARGIN,     MARGIN+S/2,   R); // 左
+  }
+
+  // 見本②：中心に半径2マスの大円 ＋ 四隅から半径2マスの1/4扇形
+  function sample2(){
+    sampleLayer.innerHTML='';
+    const Cx=MARGIN+S/2, Cy=MARGIN+S/2, R=step*2;
+
+    // 中央の大円
+    redCircle(Cx, Cy, R);
+
+    // 四隅・中点座標
+    const tl={x:MARGIN,   y:MARGIN},        tr={x:MARGIN+S, y:MARGIN};
+    const br={x:MARGIN+S, y:MARGIN+S},      bl={x:MARGIN,   y:MARGIN+S};
+    const topMid={x:MARGIN+S/2,y:MARGIN},   rightMid={x:MARGIN+S,y:MARGIN+S/2};
+    const bottomMid={x:MARGIN+S/2,y:MARGIN+S}, leftMid={x:MARGIN,y:MARGIN+S/2};
+
+    // ヘルパー：赤1/4円弧（角の内側へ向かうよう sweep=0）
+    function redQuarter(sx,sy, ex,ey){
+      const p=document.createElementNS('http://www.w3.org/2000/svg','path');
+      p.setAttribute('d', `M ${sx} ${sy} A ${R} ${R} 0 0 0 ${ex} ${ey}`);
+      p.setAttribute('fill','none'); p.setAttribute('stroke','#ff0000'); p.setAttribute('stroke-width','1');
+      sampleLayer.appendChild(p);
+    }
+    // 左上：左中点→上中点
+    redQuarter(leftMid.x,  leftMid.y,  topMid.x,    topMid.y);
+    // 右上：上中点→右中点
+    redQuarter(topMid.x,   topMid.y,   rightMid.x,  rightMid.y);
+    // 右下：右中点→下中点
+    redQuarter(rightMid.x, rightMid.y, bottomMid.x, bottomMid.y);
+    // 左下：下中点→左中点
+    redQuarter(bottomMid.x,bottomMid.y,leftMid.x,   leftMid.y);
+  }
+
+  // 見本③：中心から上下左右1マスずらし中心、半径1マスの円×4（中央の花）
+  function sample3(){
+    sampleLayer.innerHTML='';
+    const Cx=MARGIN+S/2, Cy=MARGIN+S/2, R=step;
+    redCircle(Cx,      Cy-step, R); // 上
+    redCircle(Cx+step, Cy,      R); // 右
+    redCircle(Cx,      Cy+step, R); // 下
+    redCircle(Cx-step, Cy,      R); // 左
+  }
+
+  // 見本④：中央の横列に半径1マスの円×3
+  function sample4(){
+    sampleLayer.innerHTML='';
+    const y=MARGIN+S/2, R=step;
+    redCircle(MARGIN+step,   y, R);
+    redCircle(MARGIN+2*step, y, R);
+    redCircle(MARGIN+3*step, y, R);
+  }
+
+  document.getElementById('btnSample1').addEventListener('click', sample1);
+  document.getElementById('btnSample2').addEventListener('click', sample2);
+  document.getElementById('btnSample3').addEventListener('click', sample3);
+  document.getElementById('btnSample4').addEventListener('click', sample4);
+
+  // 起動時は見本なし（必要ならここで sample1() を呼ぶ）
+})();
+</script>
+</body>
+</html>
